@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carnê Leão Calculator</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+        }
+        .result {
+            margin-top: 20px;
+        }
+        .result p {
+            margin: 5px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Carnê Leão Calculator</h1>
+        <form id="carneLeaoForm">
+            <div class="form-group">
+                <label for="value">Gross Value (USD):</label>
+                <input type="text" id="value" required>
+            </div>
+            <div class="form-group">
+                <label for="impostos">Federal Taxes Paid (USD):</label>
+                <input type="text" id="impostos" required>
+            </div>
+            <div class="form-group">
+                <label for="date">Date:</label>
+                <input type="date" tofd id="date" required>
+            </div>
+            <div class="form-group">
+                <label for="pais">País:</label>
+                <input type="text" id="pais" value="EUA" required>
+            </div>
+            <div class="form-group">
+                <label for="empresa">Empresa:</label>
+                <input type="text" value="ReferralExchange" id="empresa" required>
+            </div>
+            <div class="form-group">
+                <label for="servico">Serviço:</label>
+                <input type="text" value="Engenharia de Software" id="servico" required>
+            </div>
+            <button type="submit">Calculate</button>
+        </form>
+        <div class="result" id="result"></div>
+    </div>
+    <script>
+        document.getElementById('date').valueAsDate = new Date();
+        function copyToClipboard(elementId) {
+            const text = document.getElementById(elementId).innerText;
+            navigator.clipboard.writeText(text).then(function() {
+                console.log('Copying to clipboard was successful!');
+            }, function(err) {
+                console.error('Could not copy text: ', err);
+            });
+        }
+        document.getElementById('carneLeaoForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            const value = parseFloat(document.getElementById('value').value.replace(',', '.'));
+            const impostos = eval(document.getElementById('impostos').value.replace(',', '.'));
+            const date = new Date(document.getElementById('date').value);
+            const empresa = document.getElementById('empresa').value;
+            const pais = document.getElementById('pais').value;
+            const servico = document.getElementById('servico').value;
+            const targetDate = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() - 1, 15, 0, 0, 0));
+            const dateStr = targetDate.toISOString().split('T')[0];
+
+            console.log(value, impostos, date, targetDate, dateStr)
+
+            fetch(`https://www3.bcb.gov.br/bc_moeda/rest/cotacao/fechamento/ultima/1/220/${dateStr}`)
+                .then(response => response.text())
+                .then(xmlString => {
+                    const parser = new DOMParser();
+                    const xmlDoc = parser.parseFromString(xmlString, "text/xml");
+                    const taxaCompra = parseFloat(xmlDoc.getElementsByTagName("taxaCompra")[0].textContent);
+
+                    console.log("dcot: "+ xmlDoc.getElementsByTagName("dataHoraCotacao")[0].textContent);
+                    const dateCotacao = new Date(xmlDoc.getElementsByTagName("dataHoraCotacao")[0].textContent);
+
+                    const valorstr = value.toLocaleString('pt-BR', { style: 'currency', currency: 'USD' });
+                    const compstr = taxaCompra.toString().replace('.', ',');
+
+                    const entrada = `A empresa "${empresa}" do país "${pais}" pagou ${valorstr} na data ${date.toLocaleDateString('pt-BR', { timeZone: 'UTC' })} pelo serviço de "${servico}", convertido com a taxa de compra ${compstr} BRL/USD do BCB da data de cotação ${dateCotacao.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}`;
+
+                    const valoradeclarar = value * taxaCompra;
+                    const impostospagos = impostos * taxaCompra;
+                    const impostovalorstr = impostos.toLocaleString('pt-BR', { style: 'currency', currency: 'USD' });
+
+                    const entradaImpostos = `Impostos valendo ${impostovalorstr} já foram pagos ao país "${pais}" na data ${date.toLocaleDateString('pt-BR', { timeZone: 'UTC' })} no valor de ${valorstr} (${valoradeclarar.toFixed(2).replace('.', ',')} BRL) por "${servico}", convertido com a taxa de compra ${compstr} BRL/USD do BCB da data de cotação ${dateCotacao.toLocaleDateString('pt-BR', { timeZone: 'UTC' })}`;
+
+                    document.getElementById('result').innerHTML = `
+                        <p id="rendimentoEntrada">${entrada} </p>
+                        <button onclick="copyToClipboard('rendimentoEntrada')">Copy Rendimento Histórico</button>
+                        <p>Chars: ${entrada.length}</p>
+                        <p>Valor a declarar: <b id="rendimentoValor">${valoradeclarar.toFixed(2).replace('.', ',')}</b> BRL <button onclick="copyToClipboard('rendimentoValor')">Copy Valor</button></p>
+                        <p id="impostoEntrada">${entradaImpostos}</p>
+                        <button onclick="copyToClipboard('impostoEntrada')">Copy Imposto Histórico</button>
+                        <p>Chars: ${entradaImpostos.length}</p>
+                        <p>Impostos já pagos: <b id="impostoValor">${impostospagos.toFixed(2).replace('.', ',')}</b> BRL <button onclick="copyToClipboard('impostoValor')">Copy Valor</button></p>
+                    `;
+                });
+        });
+    </script>
+</body>
+</html>
